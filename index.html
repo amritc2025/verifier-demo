@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mobile Driving Licence Verifier</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.7/minified/html5-qrcode.min.js"></script>
   <style>
     body {
       font-family: sans-serif;
@@ -35,55 +36,49 @@
   <div id="reader" style="width: 300px;"></div>
   <div id="result"></div>
 
-  <script type="module">
-    import { verifyCredential } from "https://cdn.jsdelivr.net/npm/did-jwt-vc@3.3.0/dist/index.js";
-    import { Resolver } from "https://cdn.jsdelivr.net/npm/did-resolver@4.1.0/dist/index.js";
-    import { getResolver as keyDidResolver } from "https://cdn.jsdelivr.net/npm/@veramo/did-provider-key@9.0.1/dist/index.js";
-    import { Html5QrcodeScanner } from "https://unpkg.com/html5-qrcode@2.3.7/minified/html5-qrcode.min.js";
+  <script src="https://cdn.jsdelivr.net/npm/did-jwt-vc@3.3.0/dist/index.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/did-resolver@4.1.0/dist/index.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@veramo/did-provider-key@9.0.1/dist/index.umd.min.js"></script>
 
-    const html5QrcodeScanner = new Html5QrcodeScanner(
-      "reader",
-      { fps: 10, qrbox: 250 },
-      false
-    );
+  <script>
+    const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
 
-    function onScanSuccess(decodedText, decodedResult) {
-      html5QrcodeScanner.clear().then(() => {
-        (async () => {
-          try {
-            let vc;
-            if (decodedText.startsWith("http://") || decodedText.startsWith("https://")) {
-              const response = await fetch(decodedText);
-              vc = await response.json();
-            } else {
-              vc = JSON.parse(decodedText);
-            }
-
-            const resolver = new Resolver({ ...keyDidResolver() });
-            await verifyCredential(vc, resolver);
-
-            const subject = vc.credentialSubject;
-            document.getElementById("result").innerHTML = `
-              <div class="verified">✅ Mobile Driving Licence Verified</div>
-              <p>👤 <strong>${subject.givenName} ${subject.familyName}</strong></p>
-              <p>🎂 ${subject.birthDate}</p>
-              <p>🚘 Classes: ${subject.drivingClass}</p>
-              <p>📅 Valid Until: ${subject.expiryDate}</p>
-            `;
-          } catch (err) {
-            console.error(err);
-            document.getElementById("result").innerHTML =
-              '<p class="error">❌ Verification failed. Invalid or unreachable VC.</p>';
+    scanner.render(
+      async function (decodedText) {
+        scanner.clear();
+        let vc;
+        try {
+          if (decodedText.startsWith("http://") || decodedText.startsWith("https://")) {
+            const response = await fetch(decodedText);
+            vc = await response.json();
+          } else {
+            vc = JSON.parse(decodedText);
           }
-        })();
-      });
-    }
 
-    function onScanFailure(error) {
-      // Optionally handle scan errors
-    }
+          const resolver = new didResolver.Resolver({
+            ...didProviderKey.getResolver()
+          });
 
-    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+          const result = await didJwtVc.verifyCredential(vc, resolver);
+
+          const subject = vc.credentialSubject;
+          document.getElementById("result").innerHTML = `
+            <div class="verified">✅ Mobile Driving Licence Verified</div>
+            <p>👤 <strong>${subject.givenName} ${subject.familyName}</strong></p>
+            <p>🎂 ${subject.birthDate}</p>
+            <p>🚘 Classes: ${subject.drivingClass}</p>
+            <p>📅 Valid Until: ${subject.expiryDate}</p>
+          `;
+        } catch (err) {
+          console.error(err);
+          document.getElementById("result").innerHTML =
+            '<p class="error">❌ Verification failed. Invalid or unreachable VC.</p>';
+        }
+      },
+      function (error) {
+        // Handle scan errors silently
+      }
+    );
   </script>
 </body>
 </html>
