@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mobile Driving Licence Verifier</title>
-  <script src="https://unpkg.com/html5-qrcode@2.3.7/minified/html5-qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     body {
       font-family: sans-serif;
@@ -33,52 +33,61 @@
   <h3>🧾 Sample Verifiable Credential QR Code:</h3>
   <img src="vc-qrcodeV2.png" alt="VC QR Code" width="200" />
 
+  <h3>📷 Scan VC QR Code:</h3>
   <div id="reader" style="width: 300px;"></div>
   <div id="result"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/did-jwt-vc@3.3.0/dist/index.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/did-resolver@4.1.0/dist/index.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@veramo/did-provider-key@9.0.1/dist/index.umd.min.js"></script>
+  <!-- Main Script (non-module) to use html5-qrcode -->
+  <script type="text/javascript">
+    async function startScanner() {
+      const html5QrCode = new Html5Qrcode("reader");
+      const config = { fps: 10, qrbox: 250 };
 
-  <script>
-    const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+      html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        async (decodedText) => {
+          html5QrCode.stop();
+          let vc;
 
-    scanner.render(
-      async function (decodedText) {
-        scanner.clear();
-        let vc;
-        try {
-          if (decodedText.startsWith("http://") || decodedText.startsWith("https://")) {
-            const response = await fetch(decodedText);
-            vc = await response.json();
-          } else {
-            vc = JSON.parse(decodedText);
+          try {
+            if (decodedText.startsWith("http://") || decodedText.startsWith("https://")) {
+              const response = await fetch(decodedText);
+              vc = await response.json();
+            } else {
+              vc = JSON.parse(decodedText);
+            }
+
+            // Dynamic import to avoid mixing module type
+            const { verifyCredential } = await import("https://cdn.jsdelivr.net/npm/did-jwt-vc@3.3.0/dist/index.js");
+            const { Resolver } = await import("https://cdn.jsdelivr.net/npm/did-resolver@4.1.0/dist/index.js");
+            const { getResolver } = await import("https://cdn.jsdelivr.net/npm/@veramo/did-provider-key@9.0.1/dist/index.js");
+
+            const resolver = new Resolver({ ...getResolver() });
+            const verified = await verifyCredential(vc, resolver);
+
+            const subject = vc.credentialSubject;
+            document.getElementById("result").innerHTML = `
+              <div class="verified">✅ Mobile Driving Licence Verified</div>
+              <p>👤 <strong>${subject.givenName} ${subject.familyName}</strong></p>
+              <p>🎂 ${subject.birthDate}</p>
+              <p>🚘 Classes: ${subject.drivingClass}</p>
+              <p>📅 Valid Until: ${subject.expiryDate}</p>
+            `;
+          } catch (err) {
+            console.error(err);
+            document.getElementById("result").innerHTML =
+              '<p class="error">❌ Verification failed. Invalid or unreachable VC.</p>';
           }
-
-          const resolver = new didResolver.Resolver({
-            ...didProviderKey.getResolver()
-          });
-
-          const result = await didJwtVc.verifyCredential(vc, resolver);
-
-          const subject = vc.credentialSubject;
-          document.getElementById("result").innerHTML = `
-            <div class="verified">✅ Mobile Driving Licence Verified</div>
-            <p>👤 <strong>${subject.givenName} ${subject.familyName}</strong></p>
-            <p>🎂 ${subject.birthDate}</p>
-            <p>🚘 Classes: ${subject.drivingClass}</p>
-            <p>📅 Valid Until: ${subject.expiryDate}</p>
-          `;
-        } catch (err) {
-          console.error(err);
-          document.getElementById("result").innerHTML =
-            '<p class="error">❌ Verification failed. Invalid or unreachable VC.</p>';
+        },
+        (errorMessage) => {
+          // console.log(`QR scan error: ${errorMessage}`);
         }
-      },
-      function (error) {
-        // Handle scan errors silently
-      }
-    );
+      );
+    }
+
+    window.onload = startScanner;
   </script>
 </body>
 </html>
+
