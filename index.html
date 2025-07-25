@@ -45,12 +45,22 @@
       config,
       async (decodedText) => {
         html5QrCode.stop();
-        try {
-          const vc = JSON.parse(decodedText);
+        let vc;
 
+        try {
+          // 🔍 Check if scanned QR is a URL or raw VC
+          if (decodedText.startsWith("http://") || decodedText.startsWith("https://")) {
+            const response = await fetch(decodedText);
+            vc = await response.json();
+          } else {
+            vc = JSON.parse(decodedText);
+          }
+
+          // 🛡️ Resolve and verify VC
           const resolver = new Resolver({ ...keyDidResolver() });
           const verified = await verifyCredential(vc, resolver);
 
+          // 👁️ Show results
           const subject = vc.credentialSubject;
           document.getElementById("result").innerHTML = `
             <div class="verified">✅ Mobile Driving Licence Verified</div>
@@ -62,7 +72,7 @@
         } catch (err) {
           console.error(err);
           document.getElementById("result").innerHTML =
-            '<p class="error">❌ Verification failed. Invalid or corrupted VC.</p>';
+            '<p class="error">❌ Verification failed. Invalid or unreachable VC.</p>';
         }
       },
       (err) => {
