@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mobile Driving Licence Verifier</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background-color: #f9f9f9;
+    }
+    #result {
+      margin-top: 20px;
+      background: #fff;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    .verified {
+      color: green;
+      font-weight: bold;
+    }
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <h2>📱 Mobile Driving Licence Verifier</h2>
+  <div id="reader" style="width: 300px;"></div>
+  <div id="result"></div>
+
+  <script type="module">
+    import { verifyCredential } from "https://cdn.jsdelivr.net/npm/did-jwt-vc@3.3.0/dist/index.js";
+    import { Resolver } from "https://cdn.jsdelivr.net/npm/did-resolver@4.1.0/dist/index.js";
+    import { getResolver as keyDidResolver } from "https://cdn.jsdelivr.net/npm/@veramo/did-provider-key@9.0.1/dist/index.js";
+
+    const html5QrCode = new Html5Qrcode("reader");
+    const config = { fps: 10, qrbox: 250 };
+
+    html5QrCode.start(
+      { facingMode: "environment" },
+      config,
+      async (decodedText) => {
+        html5QrCode.stop();
+        try {
+          const vc = JSON.parse(decodedText);
+
+          const resolver = new Resolver({ ...keyDidResolver() });
+          const verified = await verifyCredential(vc, resolver);
+
+          const subject = vc.credentialSubject;
+          document.getElementById("result").innerHTML = `
+            <div class="verified">✅ Mobile Driving Licence Verified</div>
+            <p>👤 <strong>${subject.givenName} ${subject.familyName}</strong></p>
+            <p>🎂 ${subject.birthDate}</p>
+            <p>🚘 Classes: ${subject.drivingClass}</p>
+            <p>📅 Valid Until: ${subject.expiryDate}</p>
+          `;
+        } catch (err) {
+          console.error(err);
+          document.getElementById("result").innerHTML =
+            '<p class="error">❌ Verification failed. Invalid or corrupted VC.</p>';
+        }
+      },
+      (err) => {
+        // Ignore scanning errors
+      }
+    );
+  </script>
+</body>
+</html>
