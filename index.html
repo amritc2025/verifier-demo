@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mobile Driving Licence Verifier</title>
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     body {
       font-family: sans-serif;
@@ -32,7 +31,7 @@
 
   <h3>🧾 Sample Verifiable Credential QR Code:</h3>
   <img src="vc-qrcodeV2.png" alt="VC QR Code" width="200" />
-  
+
   <div id="reader" style="width: 300px;"></div>
   <div id="result"></div>
 
@@ -40,49 +39,51 @@
     import { verifyCredential } from "https://cdn.jsdelivr.net/npm/did-jwt-vc@3.3.0/dist/index.js";
     import { Resolver } from "https://cdn.jsdelivr.net/npm/did-resolver@4.1.0/dist/index.js";
     import { getResolver as keyDidResolver } from "https://cdn.jsdelivr.net/npm/@veramo/did-provider-key@9.0.1/dist/index.js";
+    import { Html5QrcodeScanner } from "https://unpkg.com/html5-qrcode@2.3.7/minified/html5-qrcode.min.js";
 
-    const html5QrCode = new Html5Qrcode("reader");
-    const config = { fps: 10, qrbox: 250 };
-
-    html5QrCode.start(
-      { facingMode: "environment" },
-      config,
-      async (decodedText) => {
-        html5QrCode.stop();
-        let vc;
-
-        try {
-          // 🔍 Check if scanned QR is a URL or raw VC
-          if (decodedText.startsWith("http://") || decodedText.startsWith("https://")) {
-            const response = await fetch(decodedText);
-            vc = await response.json();
-          } else {
-            vc = JSON.parse(decodedText);
-          }
-
-          // 🛡️ Resolve and verify VC
-          const resolver = new Resolver({ ...keyDidResolver() });
-          const verified = await verifyCredential(vc, resolver);
-
-          // 👁️ Show results
-          const subject = vc.credentialSubject;
-          document.getElementById("result").innerHTML = `
-            <div class="verified">✅ Mobile Driving Licence Verified</div>
-            <p>👤 <strong>${subject.givenName} ${subject.familyName}</strong></p>
-            <p>🎂 ${subject.birthDate}</p>
-            <p>🚘 Classes: ${subject.drivingClass}</p>
-            <p>📅 Valid Until: ${subject.expiryDate}</p>
-          `;
-        } catch (err) {
-          console.error(err);
-          document.getElementById("result").innerHTML =
-            '<p class="error">❌ Verification failed. Invalid or unreachable VC.</p>';
-        }
-      },
-      (err) => {
-        // Ignore scanning errors
-      }
+    const html5QrcodeScanner = new Html5QrcodeScanner(
+      "reader",
+      { fps: 10, qrbox: 250 },
+      false
     );
+
+    function onScanSuccess(decodedText, decodedResult) {
+      html5QrcodeScanner.clear().then(() => {
+        (async () => {
+          try {
+            let vc;
+            if (decodedText.startsWith("http://") || decodedText.startsWith("https://")) {
+              const response = await fetch(decodedText);
+              vc = await response.json();
+            } else {
+              vc = JSON.parse(decodedText);
+            }
+
+            const resolver = new Resolver({ ...keyDidResolver() });
+            await verifyCredential(vc, resolver);
+
+            const subject = vc.credentialSubject;
+            document.getElementById("result").innerHTML = `
+              <div class="verified">✅ Mobile Driving Licence Verified</div>
+              <p>👤 <strong>${subject.givenName} ${subject.familyName}</strong></p>
+              <p>🎂 ${subject.birthDate}</p>
+              <p>🚘 Classes: ${subject.drivingClass}</p>
+              <p>📅 Valid Until: ${subject.expiryDate}</p>
+            `;
+          } catch (err) {
+            console.error(err);
+            document.getElementById("result").innerHTML =
+              '<p class="error">❌ Verification failed. Invalid or unreachable VC.</p>';
+          }
+        })();
+      });
+    }
+
+    function onScanFailure(error) {
+      // Optionally handle scan errors
+    }
+
+    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
   </script>
 </body>
 </html>
