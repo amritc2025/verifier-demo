@@ -1,6 +1,6 @@
 // netlify/functions/verify-vc.ts
 import { Handler } from '@netlify/functions'
-import { agent } from '../../agent'
+import { getAgent } from './agent'
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -17,6 +17,8 @@ export const handler: Handler = async (event) => {
     if (!credential) {
       return { statusCode: 400, body: 'Missing credential in request body' }
     }
+
+    const agent = await getAgent()
 
     const verificationResult = await agent.verifyCredential({
       credential,
