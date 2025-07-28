@@ -1,24 +1,27 @@
 // netlify/functions/credential-issuer.ts
-import { Handler } from '@netlify/functions'
-import { agent } from '../../agent'
+import type { Handler } from '@netlify/functions'
+import { agent } from './agent'
 
-export const handler: Handler = async (event) => {
+const handler: Handler = async (event) => {
   if (event.httpMethod !== 'GET') {
-    return { statusCode: 405, body: 'Method Not Allowed' }
+    return {
+      statusCode: 405,
+      headers: {
+        'Allow': 'GET',
+        'Content-Type': 'text/plain',
+      },
+      body: 'Method Not Allowed',
+    }
   }
 
   try {
-    // Get or create issuer DID
+    // Load existing or create new issuer DID
     const identifiers = await agent.didManagerFind()
-    let issuerDid: string
-    if (identifiers.length === 0) {
-      const identifier = await agent.didManagerCreate({ provider: 'did:key' })
-      issuerDid = identifier.did
-    } else {
-      issuerDid = identifiers[0].did
-    }
+    const issuerDid = identifiers.length > 0
+      ? identifiers[0].did
+      : (await agent.didManagerCreate({ provider: 'did:key' })).did
 
-    // For demo, issue credential to same DID as subject
+    // Set subject as same DID (for demo)
     const subjectDid = issuerDid
 
     const credential = await agent.createVerifiableCredential({
@@ -42,23 +45,27 @@ export const handler: Handler = async (event) => {
           givenName: 'John',
           familyName: 'Walt',
           birthDate: '2000-01-01',
-          drivingClass: 'Motocycle, Private Car',
+          drivingClass: 'Motorcycle, Private Car',
           expiryDate: '2030-12-31',
         },
       },
       proofFormat: 'lds',
     })
 
-    // Return the signed VC JSON to the client (wallet)
     return {
       statusCode: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*', // adjust for production
+        'Access-Control-Allow-Origin': '*', // Consider tightening this in production
       },
       body: JSON.stringify(credential),
     }
   } catch (error: any) {
-    return { statusCode: 500, body: error.message }
+    return {
+      statusCode: 500,
+      body: `Error issuing credential: ${error.message}`,
+    }
   }
 }
+
+export { handler }

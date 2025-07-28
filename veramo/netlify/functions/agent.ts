@@ -1,4 +1,5 @@
-//agent.ts
+// netlify/functions/agent.ts
+
 import {
   createAgent,
   IDIDManager,
@@ -25,16 +26,15 @@ import {
   PrivateKeyStore,
   migrations,
   DataStore,
-  DataStoreORM
+  DataStoreORM,
 } from '@veramo/data-store'
-
 
 import { DataSource } from 'typeorm'
 import * as fs from 'fs'
 
 const KMS_SECRET_KEY = '4a92dd58289d4f65b9c412346c351f4e'
-
 const dbFile = 'database.sqlite'
+
 if (!fs.existsSync(dbFile)) {
   fs.writeFileSync(dbFile, '')
 }
@@ -48,50 +48,48 @@ const dbConnection = new DataSource({
   entities: Entities,
 })
 
-let agent: any // declare here
+let agentInstance: any
 
-const setupAgent = async () => {
-  await dbConnection.initialize()
-  console.log('✅ Database initialized and migrations run if needed')
+export const getAgent = async () => {
+  if (!agentInstance) {
+    await dbConnection.initialize()
 
-  agent = createAgent<IDIDManager & IKeyManager & ICredentialIssuer & IResolver>({
-    plugins: [
-      new KeyManager({
-        store: new KeyStore(dbConnection),
-        kms: {
-          local: new KeyManagementSystem(
-            new PrivateKeyStore(dbConnection, new SecretBox(KMS_SECRET_KEY))
-          ),
-        },
-      }),
-      new DIDManager({
-        store: new DIDStore(dbConnection),
-        defaultProvider: 'did:key',
-        providers: {
-          'did:key': new KeyDIDProvider({
-            defaultKms: 'local',
-          }),
-        },
-      }),
-      new CredentialPlugin(),
-      new CredentialIssuerLD({
-        suites: [new VeramoEd25519Signature2018()],
-        contextMaps: [contexts.get('https://www.w3.org/2018/credentials/v1')],
-      }),
-      new DIDResolverPlugin({
-        resolver: new Resolver({
-          ...getDidKeyResolver(),
+    agentInstance = createAgent<IDIDManager & IKeyManager & ICredentialIssuer & IResolver>({
+      plugins: [
+        new KeyManager({
+          store: new KeyStore(dbConnection),
+          kms: {
+            local: new KeyManagementSystem(
+              new PrivateKeyStore(dbConnection, new SecretBox(KMS_SECRET_KEY))
+            ),
+          },
         }),
-      }),
-      new DataStore(dbConnection),
-  new DataStoreORM(dbConnection),
-    ],
-  })
+        new DIDManager({
+          store: new DIDStore(dbConnection),
+          defaultProvider: 'did:key',
+          providers: {
+            'did:key': new KeyDIDProvider({
+              defaultKms: 'local',
+            }),
+          },
+        }),
+        new CredentialPlugin(),
+        new CredentialIssuerLD({
+          suites: [new VeramoEd25519Signature2018()],
+          contextMaps: [contexts.get('https://www.w3.org/2018/credentials/v1')],
+        }),
+        new DIDResolverPlugin({
+          resolver: new Resolver({
+            ...getDidKeyResolver(),
+          }),
+        }),
+        new DataStore(dbConnection),
+        new DataStoreORM(dbConnection),
+      ],
+    })
 
-  console.log('✅ agent.ts module loaded')
-  console.log(`📂 Using SQLite DB: ${dbFile}`)
+    console.log('✅ Agent initialized successfully in Netlify function')
+  }
+
+  return agentInstance
 }
-
-await setupAgent()
-export { agent,dbConnection }
-
