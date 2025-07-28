@@ -1,0 +1,8 @@
+[build]
+  functions = "netlify/functions"
+  publish = "."
+
+[[redirects]]
+  from = "/credential-offer"
+  to = "/.netlify/functions/credential-offer"
+  status = 200
