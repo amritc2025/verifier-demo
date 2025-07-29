@@ -15,11 +15,12 @@ export const handler: Handler = async () => {
       },
     ],
     grants: {
-      'urn:ietf:params:oauth:grant-type:pre-authorized_code': {
-        pre-authorized_code: 'test-code-123',
-        user_pin_required: false,
-      },
-    },
+  'urn:ietf:params:oauth:grant-type:pre-authorized_code': {
+    'pre-authorized_code': 'test-code-123',
+    user_pin_required: false,
+  },
+}
+
   }
 
   return {
