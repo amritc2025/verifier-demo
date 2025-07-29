@@ -1,10 +1,11 @@
-// netlify/functions/credential-offer.ts
 import { Handler } from '@netlify/functions'
 
 export const handler: Handler = async () => {
-  const responsePayload = {
-    credential_issuer: 'https://mdl-project.netlify.app/.well-known/openid-credential-issuer',
+  const metadata = {
+    issuer: 'https://mdl-project.netlify.app',
+    authorization_endpoint: 'https://mdl-project.netlify.app/.netlify/functions/authorize',  // if you implement OAuth
     credential_endpoint: 'https://mdl-project.netlify.app/.netlify/functions/credential-issuer',
+    credential_issuer: 'https://mdl-project.netlify.app',
     credentials_supported: [
       {
         id: 'MobileDrivingLicence',
@@ -14,12 +15,9 @@ export const handler: Handler = async () => {
         cryptographic_suites_supported: ['ES256'],
       },
     ],
-    grants: {
-      'urn:ietf:params:oauth:grant-type:pre-authorized_code': {
-        pre-authorized_code: 'test-code-123',
-        user_pin_required: false,
-      },
-    },
+    grants_supported: ['urn:ietf:params:oauth:grant-type:pre-authorized_code'],
+    pre_authorized_code_supported: true,
+    user_pin_required: false,
   }
 
   return {
@@ -28,6 +26,6 @@ export const handler: Handler = async () => {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
     },
-    body: JSON.stringify(responsePayload),
+    body: JSON.stringify(metadata),
   }
 }
