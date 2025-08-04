@@ -12,7 +12,7 @@ export const handler: Handler = async () => {
       {
         id: 'MobileDrivingLicence',
         types: ['VerifiableCredential', 'MobileDrivingLicence'],
-        format: 'jwt',
+        format: 'jwt_vc_json',
         cryptographic_binding_methods_supported: ['did'],
         cryptographic_suites_supported: ['ES256'],
       },

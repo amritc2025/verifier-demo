@@ -57,7 +57,7 @@ export const handler: Handler = async (event) => {
           expiryDate: '2030-12-31',
         },
       },
-      proofFormat: 'lds',
+      proofFormat: 'jwt_vc',
     })
 
     return {
