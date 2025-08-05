@@ -3,7 +3,7 @@ import { Handler } from '@netlify/functions'
 
 export const handler: Handler = async () => {
   const responsePayload = {
-    credential_issuer: 'https://mdl-project.netlify.app/.well-known/openid-credential-issuer',
+    credential_issuer: 'https://mdl-project.netlify.app/.netlify/functions/metadata',
     credential_endpoint: 'https://mdl-project.netlify.app/.netlify/functions/credential-issuer',
     credentials_supported: [
       {
