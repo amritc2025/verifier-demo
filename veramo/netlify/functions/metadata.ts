@@ -5,15 +5,16 @@ import { Handler } from '@netlify/functions'
 export const handler: Handler = async () => {
   const metadata = {
     issuer: 'https://mdl-project.netlify.app',
+    credential_issuer: 'https://mdl-project.netlify.app',
     credential_endpoint: 'https://mdl-project.netlify.app/.netlify/functions/credential-issuer',
     token_endpoint: 'https://mdl-project.netlify.app/.netlify/functions/token',
     credentials_supported: [
       {
         id: 'MobileDrivingLicence',
         types: ['VerifiableCredential', 'MobileDrivingLicence'],
-        format: 'mDL',
+        format: 'ldp_vc',
         cryptographic_binding_methods_supported: ['did'],
-        cryptographic_suites_supported: ['ES256'],
+        cryptographic_suites_supported: ['Ed25519Signature2018'],
       },
     ],
     grants_supported: ['urn:ietf:params:oauth:grant-type:pre-authorized_code'],
@@ -30,3 +31,4 @@ export const handler: Handler = async () => {
     body: JSON.stringify(metadata),
   }
 }
+

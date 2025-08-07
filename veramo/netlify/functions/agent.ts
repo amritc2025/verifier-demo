@@ -16,7 +16,7 @@ import { KeyManagementSystem, SecretBox } from '@veramo/kms-local'
 import { KeyDIDProvider } from '@veramo/did-provider-key'
 import { Resolver } from 'did-resolver'
 import { getDidKeyResolver } from '@veramo/did-provider-key'
-import { CredentialIssuerLD, VeramoEd25519Signature2018 } from '@veramo/credential-ld'
+import { CredentialIssuerLD, VeramoEd25519Signature2018,ICredentialIssuerLD } from '@veramo/credential-ld'
 import { contexts } from '@digitalbazaar/credentials-context'
 
 import {
@@ -54,7 +54,7 @@ export const getAgent = async () => {
   if (!agentInstance) {
     await dbConnection.initialize()
 
-    agentInstance = createAgent<IDIDManager & IKeyManager & ICredentialIssuer & IResolver>({
+    agentInstance = createAgent<IDIDManager & IKeyManager & ICredentialIssuer & ICredentialIssuerLD & IResolver>({
       plugins: [
         new KeyManager({
           store: new KeyStore(dbConnection),
@@ -76,7 +76,7 @@ export const getAgent = async () => {
         new CredentialPlugin(),
         new CredentialIssuerLD({
           suites: [new VeramoEd25519Signature2018()],
-          contextMaps: [contexts.get('https://www.w3.org/2018/credentials/v1')],
+          contextMaps: [contexts],
         }),
         new DIDResolverPlugin({
           resolver: new Resolver({

@@ -9,9 +9,9 @@ export const handler: Handler = async () => {
       {
         id: 'MobileDrivingLicence',
         types: ['VerifiableCredential', 'MobileDrivingLicence'],
-        format: 'mDL',
+        format: 'ldp_vc',
         cryptographic_binding_methods_supported: ['did'],
-        cryptographic_suites_supported: ['ES256'],
+        cryptographic_suites_supported: ['Ed25519Signature2018'],
       },
     ],
     grants: {
