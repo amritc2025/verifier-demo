@@ -5,14 +5,13 @@ import { Handler } from '@netlify/functions'
 export const handler: Handler = async () => {
   const metadata = {
     issuer: 'https://mdl-project.netlify.app',
-    authorization_endpoint: 'https://mdl-project.netlify.app/.netlify/functions/authorize',  // if you implement OAuth
     credential_endpoint: 'https://mdl-project.netlify.app/.netlify/functions/credential-issuer',
-    credential_issuer: 'https://mdl-project.netlify.app',
+    token_endpoint: 'https://mdl-project.netlify.app/.netlify/functions/token',
     credentials_supported: [
       {
         id: 'MobileDrivingLicence',
         types: ['VerifiableCredential', 'MobileDrivingLicence'],
-        format: 'jwt_vc_json',
+        format: 'mDL',
         cryptographic_binding_methods_supported: ['did'],
         cryptographic_suites_supported: ['ES256'],
       },

@@ -3,13 +3,13 @@ import { Handler } from '@netlify/functions'
 
 export const handler: Handler = async () => {
   const responsePayload = {
-    credential_issuer: 'https://mdl-project.netlify.app/.netlify/functions/metadata',
+    credential_issuer: 'https://mdl-project.netlify.app',
     credential_endpoint: 'https://mdl-project.netlify.app/.netlify/functions/credential-issuer',
     credentials_supported: [
       {
         id: 'MobileDrivingLicence',
         types: ['VerifiableCredential', 'MobileDrivingLicence'],
-        format: 'jwt_vc_json',
+        format: 'mDL',
         cryptographic_binding_methods_supported: ['did'],
         cryptographic_suites_supported: ['ES256'],
       },
