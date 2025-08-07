@@ -6,3 +6,8 @@
   from = "/credential-offer"
   to = "/.netlify/functions/credential-offer"
   status = 200
+
+[[redirects]]
+  from = "/.well-known/openid-credential-issuer"
+  to = "/.netlify/functions/openid-credential-issuer"
+  status = 200
