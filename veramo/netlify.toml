@@ -2,6 +2,19 @@
   functions = "netlify/functions"
   publish = "."
 
+[functions]
+  # Use esbuild for bundling
+  node_bundler = "esbuild"
+  # Force Node 18 runtime (better ESM support for @digitalbazaar, @transmute, etc.)
+  node_version = "18"
+  # Externalize certain problematic ESM dependencies so they aren't bundled incorrectly
+  external_node_modules = [
+    "@transmute/jsonld",
+    "jsonld",
+    "@digitalbazaar/http-client",
+    "@digitalbazaar/credentials-context"
+  ]
+
 [[redirects]]
   from = "/credential-offer"
   to = "/.netlify/functions/credential-offer"
@@ -12,7 +25,4 @@
   to = "/.netlify/functions/openid-credential-issuer"
   status = 200
 
-[[redirects]]
-  from = "/test-redirect"
-  to = "/.netlify/functions/credential-offer"
-  status = 200
+
