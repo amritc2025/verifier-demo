@@ -16,7 +16,7 @@ import { KeyManagementSystem, SecretBox } from '@veramo/kms-local'
 import { KeyDIDProvider } from '@veramo/did-provider-key'
 import { Resolver } from 'did-resolver'
 import { getDidKeyResolver } from '@veramo/did-provider-key'
-import { CredentialIssuerLD, VeramoEd25519Signature2018,ICredentialIssuerLD } from '@veramo/credential-ld'
+import { CredentialIssuerLD, VeramoEd25519Signature2018, ICredentialIssuerLD } from '@veramo/credential-ld'
 import { contexts } from '@digitalbazaar/credentials-context'
 
 import {
@@ -30,14 +30,16 @@ import {
 } from '@veramo/data-store'
 
 import { DataSource } from 'typeorm'
-import * as fs from 'fs'
+import * as os from 'os'
+import * as path from 'path'
 
 const KMS_SECRET_KEY = '4a92dd58289d4f65b9c412346c351f4e'
-const dbFile = 'database.sqlite'
 
-if (!fs.existsSync(dbFile)) {
-  fs.writeFileSync(dbFile, '')
-}
+// ── Use a writable location for SQLite in serverless (Netlify/Lambda): /tmp
+//    Falls back to local file when running outside serverless (dev).
+const serverlessDbPath = path.join(os.tmpdir(), 'veramo.sqlite')
+const localDbPath = path.join(process.cwd(), 'veramo.sqlite')
+const dbFile = process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME ? serverlessDbPath : localDbPath
 
 const dbConnection = new DataSource({
   type: 'sqlite',
@@ -49,10 +51,12 @@ const dbConnection = new DataSource({
 })
 
 let agentInstance: any
+let initialized = false
 
 export const getAgent = async () => {
-  if (!agentInstance) {
+  if (!initialized) {
     await dbConnection.initialize()
+    initialized = true
 
     agentInstance = createAgent<IDIDManager & IKeyManager & ICredentialIssuer & ICredentialIssuerLD & IResolver>({
       plugins: [
@@ -68,9 +72,7 @@ export const getAgent = async () => {
           store: new DIDStore(dbConnection),
           defaultProvider: 'did:key',
           providers: {
-            'did:key': new KeyDIDProvider({
-              defaultKms: 'local',
-            }),
+            'did:key': new KeyDIDProvider({ defaultKms: 'local' }),
           },
         }),
         new CredentialPlugin(),
@@ -88,7 +90,7 @@ export const getAgent = async () => {
       ],
     })
 
-    console.log('✅ Agent initialized successfully in Netlify function')
+    console.log(`✅ Agent initialized. SQLite @ ${dbFile}`)
   }
 
   return agentInstance
