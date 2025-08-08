@@ -2,12 +2,15 @@
   functions = "netlify/functions"
   publish = "."
 
+  # Set the Node version used for build & functions runtime
+  [build.environment]
+    NODE_VERSION = "18"
+
 [functions]
   # Use esbuild for bundling
   node_bundler = "esbuild"
-  # Force Node 18 runtime (better ESM support for @digitalbazaar, @transmute, etc.)
-  node_version = "18"
-  # Externalize certain problematic ESM dependencies so they aren't bundled incorrectly
+
+  # Externalize fragile ESM deps so esbuild does not mangle them
   external_node_modules = [
     "@transmute/jsonld",
     "jsonld",
@@ -24,5 +27,7 @@
   from = "/.well-known/openid-credential-issuer"
   to = "/.netlify/functions/openid-credential-issuer"
   status = 200
+
+
 
 
