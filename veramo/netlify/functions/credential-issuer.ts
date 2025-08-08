@@ -1,38 +1,51 @@
-// netlify/functions/credential-issuer.ts
-import { Handler } from '@netlify/functions'
+//netlify/functions/credential-issuer.ts
+
+import type { Handler } from '@netlify/functions'
 import { getAgent } from './agent'
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+}
+const JSON_HEADERS = {
+  ...CORS_HEADERS,
+  'Content-Type': 'application/json',
+}
+const METHOD_HEADERS = (allow: string) => ({
+  ...CORS_HEADERS,
+  'Content-Type': 'application/json',
+  'Allow': allow,
+})
+
 export const handler: Handler = async (event) => {
-  if (event.httpMethod !== 'GET') {
-    return { statusCode: 405, body: 'Method Not Allowed' }
+  // CORS preflight
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers: METHOD_HEADERS('POST'), body: '' }
   }
 
-  // Example: Check Authorization header if required
-  const authHeader = event.headers['authorization'] || event.headers['Authorization']
-  if (!authHeader) {
-    return { statusCode: 401, body: 'Unauthorized: Missing Authorization header' }
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, headers: METHOD_HEADERS('POST'), body: JSON.stringify({ error: 'method_not_allowed' }) }
   }
 
-  // For pre-authorized code, validate it here (demo only)
-  if (!authHeader.startsWith('Bearer test-code-123')) {
-    return { statusCode: 403, body: 'Forbidden: Invalid pre-authorized code' }
+  const authHeader = (event.headers['authorization'] || event.headers['Authorization'] || '').toString()
+  if (!authHeader.toLowerCase().startsWith('bearer ')) {
+    return { statusCode: 401, headers: JSON_HEADERS, body: JSON.stringify({ error: 'invalid_token', error_description: 'Missing Bearer token' }) }
+  }
+
+  const token = authHeader.slice('bearer '.length)
+  if (token !== 'access-test-code-123') {
+    return { statusCode: 403, headers: JSON_HEADERS, body: JSON.stringify({ error: 'invalid_token' }) }
   }
 
   try {
     const agent = await getAgent()
 
+    // Demo: issue to issuer DID (you can parse event.body to honor subject/proof, etc.)
     const identifiers = await agent.didManagerFind()
-    let issuerDid: string
-    if (identifiers.length === 0) {
-      const identifier = await agent.didManagerCreate({ provider: 'did:key' })
-      issuerDid = identifier.did
-    } else {
-      issuerDid = identifiers[0].did
-    }
-
+    const issuerDid = identifiers.length ? identifiers[0].did : (await agent.didManagerCreate({ provider: 'did:key' })).did
     const subjectDid = issuerDid
 
-    const credential = await agent.createVerifiableCredential({
+    const vc = await agent.createVerifiableCredential({
       credential: {
         '@context': [
           'https://www.w3.org/2018/credentials/v1',
@@ -60,15 +73,8 @@ export const handler: Handler = async (event) => {
       proofFormat: 'ldp_vc',
     })
 
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-      body: JSON.stringify(credential),
-    }
+    return { statusCode: 200, headers: JSON_HEADERS, body: JSON.stringify(vc) }
   } catch (error: any) {
-    return { statusCode: 500, body: error.message }
+    return { statusCode: 500, headers: JSON_HEADERS, body: JSON.stringify({ error: 'server_error', message: error.message }) }
   }
 }
