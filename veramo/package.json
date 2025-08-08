@@ -1,0 +1,35 @@
+{
+  "name": "veramo",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "license": "MIT",
+  "dependencies": {
+    "@digitalbazaar/credentials-context": "^3.2.0",
+    "@digitalbazaar/ed25519-signature-2018": "^4.1.0",
+    "@digitalbazaar/ed25519-signature-2020": "^5.4.0",
+    "@netlify/functions": "^4.2.1",
+    "@veramo/core": "^6.0.0",
+    "@veramo/credential-ld": "^6.0.0",
+    "@veramo/credential-w3c": "^6.0.0",
+    "@veramo/data-store": "^6.0.0",
+    "@veramo/data-store-json": "^6.0.0",
+    "@veramo/did-manager": "^6.0.0",
+    "@veramo/did-provider-key": "^6.0.0",
+    "@veramo/did-resolver": "^6.0.0",
+    "@veramo/key-manager": "^6.0.0",
+    "@veramo/kms-local": "^6.0.0",
+    "@veramo/remote-client": "^6.0.0",
+    "@veramo/remote-server": "^6.0.0",
+    "@veramo/utils": "^6.0.0",
+    "qrcode": "^1.5.4",
+    "sqlite3": "^5.1.7",
+    "typeorm": "^0.3.25"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.15",
+    "@types/qrcode": "^1.5.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}

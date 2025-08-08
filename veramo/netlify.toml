@@ -2,16 +2,13 @@
   functions = "netlify/functions"
   publish = "."
 
-  # Set the Node version used for build & functions runtime
   [build.environment]
     NODE_VERSION = "18"
 
 [functions]
-  # Use esbuild for bundling
   node_bundler = "esbuild"
-
-  # Externalize fragile ESM deps so esbuild does not mangle them
   external_node_modules = [
+    "sqlite3",
     "@transmute/jsonld",
     "jsonld",
     "@digitalbazaar/http-client",
