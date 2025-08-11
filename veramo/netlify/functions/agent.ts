@@ -56,6 +56,7 @@ let initialized = false
 export const getAgent = async () => {
   if (!initialized) {
     await dbConnection.initialize()
+    await dbConnection.runMigrations()   // ensure tables (incl. PreMigrationKey) are created
     initialized = true
 
     agentInstance = createAgent<IDIDManager & IKeyManager & ICredentialIssuer & ICredentialIssuerLD & IResolver>({
