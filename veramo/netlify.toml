@@ -8,6 +8,7 @@
 [functions]
   node_bundler = "esbuild"
   external_node_modules = [
+    "pg",
     "@transmute/jsonld",
     "jsonld",
     "@digitalbazaar/http-client",

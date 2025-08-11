@@ -13,9 +13,8 @@ import { DIDManager } from '@veramo/did-manager'
 import { KeyManager } from '@veramo/key-manager'
 import { DIDResolverPlugin } from '@veramo/did-resolver'
 import { KeyManagementSystem, SecretBox } from '@veramo/kms-local'
-import { KeyDIDProvider } from '@veramo/did-provider-key'
+import { KeyDIDProvider, getDidKeyResolver } from '@veramo/did-provider-key'
 import { Resolver } from 'did-resolver'
-import { getDidKeyResolver } from '@veramo/did-provider-key'
 import { CredentialIssuerLD, VeramoEd25519Signature2018, ICredentialIssuerLD } from '@veramo/credential-ld'
 import { contexts } from '@digitalbazaar/credentials-context'
 
@@ -30,22 +29,18 @@ import {
 } from '@veramo/data-store'
 
 import { DataSource } from 'typeorm'
-import * as os from 'os'
-import * as path from 'path'
 
 const KMS_SECRET_KEY = '4a92dd58289d4f65b9c412346c351f4e'
 
-// ── Use a writable location for SQLite in serverless (Netlify/Lambda): /tmp
-//    Falls back to local file when running outside serverless (dev).
-const serverlessDbPath = path.join(os.tmpdir(), 'veramo.sqlite')
-const localDbPath = path.join(process.cwd(), 'veramo.sqlite')
-const dbFile = process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME ? serverlessDbPath : localDbPath
-
+/** Postgres connection (DATABASE_URL must be set in Netlify env) */
 const dbConnection = new DataSource({
-  type: 'sqljs',       // pure JS / WASM driver
+  type: 'postgres',
+  url: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }, // needed on Neon/Supabase; safe for demos
   entities: Entities,
-  synchronize: true,   // auto-create tables, no migrations needed
-  migrationsRun: false,
+  migrations,
+  migrationsRun: true,   // ensure tables exist on cold start
+  synchronize: false,    // rely on migrations, not auto-sync
   logging: false,
 })
 
@@ -55,7 +50,8 @@ let initialized = false
 export const getAgent = async () => {
   if (!initialized) {
     await dbConnection.initialize()
-    await dbConnection.runMigrations()   // ensure tables (incl. PreMigrationKey) are created
+    // (migrationsRun: true already auto-runs, but calling explicitly is harmless)
+    // await dbConnection.runMigrations()
     initialized = true
 
     agentInstance = createAgent<IDIDManager & IKeyManager & ICredentialIssuer & ICredentialIssuerLD & IResolver>({
@@ -81,16 +77,14 @@ export const getAgent = async () => {
           contextMaps: [contexts],
         }),
         new DIDResolverPlugin({
-          resolver: new Resolver({
-            ...getDidKeyResolver(),
-          }),
+          resolver: new Resolver({ ...getDidKeyResolver() }),
         }),
         new DataStore(dbConnection),
         new DataStoreORM(dbConnection),
       ],
     })
 
-    console.log(`✅ Agent initialized. SQLite @ ${dbFile}`)
+    console.log('✅ Agent initialized with Postgres')
   }
 
   return agentInstance
