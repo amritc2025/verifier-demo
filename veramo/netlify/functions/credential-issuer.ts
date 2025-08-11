@@ -1,7 +1,5 @@
-//netlify/functions/credential-issuer.ts
-
+// netlify/functions/credential-issuer.ts
 import type { Handler } from '@netlify/functions'
-import { getAgent } from './agent'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -38,7 +36,12 @@ export const handler: Handler = async (event) => {
   }
 
   try {
+    // ⬇️ Lazy-load the agent so any init errors are caught by this try/catch
+    const { getAgent } = await import('./agent')
+
+    console.log('credential-issuer: initializing agent / DB connection…')
     const agent = await getAgent()
+    console.log('credential-issuer: agent ready, issuing VC…')
 
     // Demo: issue to issuer DID (you can parse event.body to honor subject/proof, etc.)
     const identifiers = await agent.didManagerFind()
@@ -75,6 +78,7 @@ export const handler: Handler = async (event) => {
 
     return { statusCode: 200, headers: JSON_HEADERS, body: JSON.stringify(vc) }
   } catch (error: any) {
-    return { statusCode: 500, headers: JSON_HEADERS, body: JSON.stringify({ error: 'server_error', message: error.message }) }
+    console.error('credential-issuer error:', error)
+    return { statusCode: 500, headers: JSON_HEADERS, body: JSON.stringify({ error: 'server_error', message: error?.message || String(error) }) }
   }
 }

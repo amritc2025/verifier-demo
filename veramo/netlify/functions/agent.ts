@@ -1,5 +1,7 @@
 // netlify/functions/agent.ts
 
+import 'reflect-metadata'
+
 import {
   createAgent,
   IDIDManager,
@@ -32,6 +34,10 @@ import { DataSource } from 'typeorm'
 
 const KMS_SECRET_KEY = '4a92dd58289d4f65b9c412346c351f4e'
 
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is not set')
+}
+
 /** Postgres connection (DATABASE_URL must be set in Netlify env) */
 const dbConnection = new DataSource({
   type: 'postgres',
@@ -49,6 +55,7 @@ let initialized = false
 
 export const getAgent = async () => {
   if (!initialized) {
+    console.log('Connecting to Postgres')
     await dbConnection.initialize()
     // (migrationsRun: true already auto-runs, but calling explicitly is harmless)
     // await dbConnection.runMigrations()
