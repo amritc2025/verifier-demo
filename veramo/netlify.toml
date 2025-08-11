@@ -8,7 +8,6 @@
 [functions]
   node_bundler = "esbuild"
   external_node_modules = [
-    "sqlite3",
     "@transmute/jsonld",
     "jsonld",
     "@digitalbazaar/http-client",

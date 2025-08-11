@@ -23,7 +23,7 @@
     "@veramo/remote-server": "^6.0.0",
     "@veramo/utils": "^6.0.0",
     "qrcode": "^1.5.4",
-    "sqlite3": "^5.1.7",
+    "sql.js": "^1.13.0",
     "typeorm": "^0.3.25"
   },
   "devDependencies": {

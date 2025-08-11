@@ -42,12 +42,11 @@ const localDbPath = path.join(process.cwd(), 'veramo.sqlite')
 const dbFile = process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME ? serverlessDbPath : localDbPath
 
 const dbConnection = new DataSource({
-  type: 'sqlite',
-  database: dbFile,
-  synchronize: false,
-  migrations,
-  migrationsRun: true,
+  type: 'sqljs',       // pure JS / WASM driver
   entities: Entities,
+  synchronize: true,   // auto-create tables, no migrations needed
+  migrationsRun: false,
+  logging: false,
 })
 
 let agentInstance: any
