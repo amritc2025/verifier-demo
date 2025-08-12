@@ -42,7 +42,8 @@ if (!process.env.DATABASE_URL) {
 const dbConnection = new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }, // needed on Neon/Supabase; safe for demos
+ssl: true,
+  extra: { ssl: { rejectUnauthorized: false } },
   entities: Entities,
   migrations,
   migrationsRun: true,   // ensure tables exist on cold start

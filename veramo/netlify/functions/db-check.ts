@@ -9,7 +9,8 @@ export const handler: Handler = async () => {
   const ds = new DataSource({
     type: 'postgres',
     url: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
+    ssl: true, // important when using URL
+  extra: { ssl: { rejectUnauthorized: false } }, // <- pg respects this
     entities: Entities,
     migrations,
     migrationsRun: false,
