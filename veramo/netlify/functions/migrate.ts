@@ -50,7 +50,7 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ ok: false, message: e?.message || String(e) }),
+      body: JSON.stringify({ ok: false, message: e?.message || String(e),stack: e?.stack  }),
     }
   }
 }
