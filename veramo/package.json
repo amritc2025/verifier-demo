@@ -22,9 +22,12 @@
     "@veramo/remote-client": "^6.0.0",
     "@veramo/remote-server": "^6.0.0",
     "@veramo/utils": "^6.0.0",
+    "did-resolver": "^4.1.0",
+    "key-did-resolver": "^4.0.0",
     "pg": "^8.16.3",
     "qrcode": "^1.5.4",
-    "typeorm": "^0.3.25"
+    "typeorm": "^0.3.25",
+    "web-did-resolver": "^2.0.30"
   },
   "devDependencies": {
     "@types/node": "^24.0.15",
