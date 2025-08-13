@@ -25,30 +25,46 @@ export const handler: Handler = async (event) => {
     return { statusCode: 405, headers: METHOD_HEADERS('POST'), body: JSON.stringify({ error: 'method_not_allowed' }) }
   }
 
-  const authHeader = (event.headers['authorization'] || event.headers['Authorization'] || '').toString()
-  if (!authHeader.toLowerCase().startsWith('bearer ')) {
+  const rawAuth = (event.headers['authorization'] || event.headers['Authorization'] || '').toString()
+  if (!rawAuth.toLowerCase().startsWith('bearer ')) {
     return { statusCode: 401, headers: JSON_HEADERS, body: JSON.stringify({ error: 'invalid_token', error_description: 'Missing Bearer token' }) }
   }
-
-  const token = authHeader.slice('bearer '.length)
+  const token = rawAuth.slice('bearer '.length)
   if (token !== 'access-test-code-123') {
     return { statusCode: 403, headers: JSON_HEADERS, body: JSON.stringify({ error: 'invalid_token' }) }
   }
 
   try {
-    // ⬇️ Lazy-load the agent so any init errors are caught by this try/catch
+    // 1) load base agent (no credential-ld)
     const { getAgent } = await import('./agent')
-
-    console.log('credential-issuer: initializing agent / DB connection…')
     const agent = await getAgent()
-    console.log('credential-issuer: agent ready, issuing VC…')
 
-    // Demo: issue to issuer DID (you can parse event.body to honor subject/proof, etc.)
+    // 2) lazily load credential-ld + contexts right before issuance
+    const { CredentialIssuerLD, VeramoEd25519Signature2018 } = await import('@veramo/credential-ld')
+    const { contexts } = await import('@digitalbazaar/credentials-context')
+
+    // 3) create a temporary agent WITH the LD plugin attached
+    //    (re-using the same base agent methods via "context" mechanism)
+    const agentWithLd = Object.assign({}, agent, {
+      plugins: [
+        ...(agent.plugins || []),
+        new CredentialIssuerLD({
+          suites: [new VeramoEd25519Signature2018()],
+          contextMaps: [contexts],
+        }),
+      ],
+    })
+
+    // 4) find or create issuer DID
     const identifiers = await agent.didManagerFind()
-    const issuerDid = identifiers.length ? identifiers[0].did : (await agent.didManagerCreate({ provider: 'did:key' })).did
+    const issuerDid = identifiers.length
+      ? identifiers[0].did
+      : (await agent.didManagerCreate({ provider: 'did:key' })).did
+
     const subjectDid = issuerDid
 
-    const vc = await agent.createVerifiableCredential({
+    // 5) issue LDP VC using the LD-capable agent
+    const vc = await agentWithLd.createVerifiableCredential({
       credential: {
         '@context': [
           'https://www.w3.org/2018/credentials/v1',
@@ -77,8 +93,8 @@ export const handler: Handler = async (event) => {
     })
 
     return { statusCode: 200, headers: JSON_HEADERS, body: JSON.stringify(vc) }
-  } catch (error: any) {
-    console.error('credential-issuer error:', error)
-    return { statusCode: 500, headers: JSON_HEADERS, body: JSON.stringify({ error: 'server_error', message: error?.message || String(error) }) }
+  } catch (e: any) {
+    console.error('issuer error', e)
+    return { statusCode: 500, headers: JSON_HEADERS, body: JSON.stringify({ error: 'server_error', message: e?.message || String(e) }) }
   }
 }

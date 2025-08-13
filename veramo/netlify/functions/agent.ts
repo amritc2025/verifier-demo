@@ -1,5 +1,4 @@
 // netlify/functions/agent.ts
-
 import 'reflect-metadata'
 
 import {
@@ -17,8 +16,6 @@ import { DIDResolverPlugin } from '@veramo/did-resolver'
 import { KeyManagementSystem, SecretBox } from '@veramo/kms-local'
 import { KeyDIDProvider, getDidKeyResolver } from '@veramo/did-provider-key'
 import { Resolver } from 'did-resolver'
-import { CredentialIssuerLD, VeramoEd25519Signature2018, ICredentialIssuerLD } from '@veramo/credential-ld'
-import { contexts } from '@digitalbazaar/credentials-context'
 
 import {
   Entities,
@@ -38,31 +35,39 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL is not set')
 }
 
-/** Postgres connection (DATABASE_URL must be set in Netlify env) */
+// parse DATABASE_URL so we can force SSL properly
+const u = new URL(process.env.DATABASE_URL)
+const host = u.hostname
+const port = Number(u.port || '6543')
+const database = u.pathname.replace(/^\//, '') || 'postgres'
+const username = decodeURIComponent(u.username)
+const password = decodeURIComponent(u.password)
+
 const dbConnection = new DataSource({
   type: 'postgres',
-  url: process.env.DATABASE_URL,
-ssl: true,
-  extra: { ssl: { rejectUnauthorized: false } },
+  host,
+  port,
+  database,
+  username,
+  password,
+  // proper SSL for Supabase pooler in serverless
+  ssl: { rejectUnauthorized: false },
   entities: Entities,
   migrations,
-  migrationsRun: true,   // ensure tables exist on cold start
-  synchronize: false,    // rely on migrations, not auto-sync
+  migrationsRun: true,
+  synchronize: false,
   logging: false,
 })
 
-let agentInstance: any
 let initialized = false
+let baseAgent: any
 
+// Base agent: DID, keys, resolver, data-store, credential-w3c (no credential-ld here)
 export const getAgent = async () => {
   if (!initialized) {
-    console.log('Connecting to Postgres')
     await dbConnection.initialize()
-    // (migrationsRun: true already auto-runs, but calling explicitly is harmless)
-    // await dbConnection.runMigrations()
-    initialized = true
 
-    agentInstance = createAgent<IDIDManager & IKeyManager & ICredentialIssuer & ICredentialIssuerLD & IResolver>({
+    baseAgent = createAgent<IDIDManager & IKeyManager & ICredentialIssuer & IResolver>({
       plugins: [
         new KeyManager({
           store: new KeyStore(dbConnection),
@@ -75,25 +80,25 @@ export const getAgent = async () => {
         new DIDManager({
           store: new DIDStore(dbConnection),
           defaultProvider: 'did:key',
-          providers: {
-            'did:key': new KeyDIDProvider({ defaultKms: 'local' }),
-          },
-        }),
-        new CredentialPlugin(),
-        new CredentialIssuerLD({
-          suites: [new VeramoEd25519Signature2018()],
-          contextMaps: [contexts],
+          providers: { 'did:key': new KeyDIDProvider({ defaultKms: 'local' }) },
         }),
         new DIDResolverPlugin({
           resolver: new Resolver({ ...getDidKeyResolver() }),
         }),
         new DataStore(dbConnection),
         new DataStoreORM(dbConnection),
+
+        // keep the classic W3C plugin (lightweight); LD will be added lazily in the issuer
+        new CredentialPlugin(),
       ],
     })
 
-    console.log('✅ Agent initialized with Postgres')
+    initialized = true
+    console.log('✅ Base agent initialized (no credential-ld)')
   }
 
-  return agentInstance
+  return baseAgent
 }
+
+// helper exported for issuer to reuse the same connection details
+export const getDbConnection = () => dbConnection
