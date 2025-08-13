@@ -4,24 +4,58 @@ import 'reflect-metadata'
 import { DataSource } from 'typeorm'
 import { Entities, migrations } from '@veramo/data-store'
 
+const json = (statusCode: number, body: any) => ({
+  statusCode,
+  headers: {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control': 'no-store',
+  },
+  body: JSON.stringify(body),
+})
+
 export const handler: Handler = async (event) => {
+  // We'll close the DataSource in a finally block if it gets created.
+  let ds: DataSource | undefined
+
   try {
     // Optional: allow dry run with ?dry=1
     const dry = event?.queryStringParameters?.dry === '1'
 
     // Prefer a direct (non-pooler) URL for DDL; fall back to normal URL
-    const url = process.env.DATABASE_URL_MIGRATOR || process.env.DATABASE_URL
-    if (!url) {
-      return {
-        statusCode: 500,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-        body: JSON.stringify({ ok: false, message: 'No DATABASE_URL/DATABASE_URL_MIGRATOR set' }),
-      }
+    const rawUrl = process.env.DATABASE_URL_MIGRATOR || process.env.DATABASE_URL
+    if (!rawUrl) {
+      return json(500, {
+        ok: false,
+        message: 'No DATABASE_URL_MIGRATOR or DATABASE_URL set',
+      })
     }
 
-    const ds = new DataSource({
+    // Validate & parse the URL ourselves to avoid pg-connection-string edge cases
+    let parsed: URL
+    try {
+      parsed = new URL(rawUrl)
+    } catch {
+      return json(500, {
+        ok: false,
+        message:
+          'Invalid Postgres URL in DATABASE_URL_MIGRATOR/DATABASE_URL. Paste the REAL direct Supabase URL (db.<project-ref>.<region>.supabase.co) — not placeholders.',
+        sample: rawUrl.slice(0, 80) + (rawUrl.length > 80 ? '…' : ''),
+      })
+    }
+
+    const isPooler =
+      /\.pooler\./.test(parsed.hostname) ||
+      parsed.hostname.includes('pooler.supabase.com')
+
+    // Build a DS config with discrete fields (host/port/user/pass/db)
+    ds = new DataSource({
       type: 'postgres',
-      url,
+      host: parsed.hostname,
+      port: parsed.port ? Number(parsed.port) : 5432,
+      username: decodeURIComponent(parsed.username),
+      password: decodeURIComponent(parsed.password),
+      database: parsed.pathname.replace(/^\//, '') || 'postgres',
       ssl: true,
       extra: { ssl: { rejectUnauthorized: false } },
       schema: 'public',
@@ -30,27 +64,40 @@ export const handler: Handler = async (event) => {
       migrationsRun: false,
       synchronize: false,
       logging: false,
-    })
+    } as any)
 
     await ds.initialize()
 
-    const [{ current_database }] = await ds.query('SELECT current_database() AS current_database')
-    const [{ current_schema }] = await ds.query('SELECT current_schema() AS current_schema')
+    const [{ current_database }] = await ds.query(
+      'SELECT current_database() AS current_database',
+    )
+    const [{ current_schema }] = await ds.query(
+      'SELECT current_schema() AS current_schema',
+    )
 
     const ran = dry ? [] : await ds.runMigrations()
 
-    await ds.destroy()
-
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ ok: true, current_database, current_schema, ran, dry }),
-    }
+    return json(200, {
+      ok: true,
+      current_database,
+      current_schema,
+      ran,
+      dry,
+      note: isPooler
+        ? 'Warning: using Supabase pooler host for migrations. Prefer the direct host (db.<project-ref>.<region>.supabase.co).'
+        : undefined,
+    })
   } catch (e: any) {
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ ok: false, message: e?.message || String(e),stack: e?.stack  }),
+    return json(500, {
+      ok: false,
+      message: e?.message || String(e),
+      stack: e?.stack,
+    })
+  } finally {
+    try {
+      if (ds?.isInitialized) await ds.destroy()
+    } catch {
+      // ignore
     }
   }
 }
