@@ -4,8 +4,8 @@ import 'reflect-metadata'
 import { DataSource } from 'typeorm'
 import { Entities, migrations } from '@veramo/data-store'
 
-const json = (statusCode: number, body: any) => ({
-  statusCode,
+const json = (code: number, body: any) => ({
+  statusCode: code,
   headers: {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
@@ -15,40 +15,28 @@ const json = (statusCode: number, body: any) => ({
 })
 
 export const handler: Handler = async (event) => {
-  // We'll close the DataSource in a finally block if it gets created.
   let ds: DataSource | undefined
 
   try {
-    // Optional: allow dry run with ?dry=1
     const dry = event?.queryStringParameters?.dry === '1'
 
-    // Prefer a direct (non-pooler) URL for DDL; fall back to normal URL
     const rawUrl = process.env.DATABASE_URL_MIGRATOR || process.env.DATABASE_URL
-    if (!rawUrl) {
-      return json(500, {
-        ok: false,
-        message: 'No DATABASE_URL_MIGRATOR or DATABASE_URL set',
-      })
-    }
+    if (!rawUrl) return json(500, { ok: false, message: 'No DATABASE_URL_MIGRATOR or DATABASE_URL set' })
 
-    // Validate & parse the URL ourselves to avoid pg-connection-string edge cases
+    // Parse URL ourselves to avoid pg-connection-string edge cases
     let parsed: URL
     try {
       parsed = new URL(rawUrl)
     } catch {
       return json(500, {
         ok: false,
-        message:
-          'Invalid Postgres URL in DATABASE_URL_MIGRATOR/DATABASE_URL. Paste the REAL direct Supabase URL (db.<project-ref>.<region>.supabase.co) — not placeholders.',
+        message: 'Invalid Postgres URL in DATABASE_URL_MIGRATOR/DATABASE_URL',
         sample: rawUrl.slice(0, 80) + (rawUrl.length > 80 ? '…' : ''),
       })
     }
 
-    const isPooler =
-      /\.pooler\./.test(parsed.hostname) ||
-      parsed.hostname.includes('pooler.supabase.com')
+    const isPooler = /\.pooler\./.test(parsed.hostname)
 
-    // Build a DS config with discrete fields (host/port/user/pass/db)
     ds = new DataSource({
       type: 'postgres',
       host: parsed.hostname,
@@ -60,44 +48,55 @@ export const handler: Handler = async (event) => {
       extra: { ssl: { rejectUnauthorized: false } },
       schema: 'public',
       entities: Entities,
-      migrations,
-      migrationsRun: false,
-      synchronize: false,
+      migrations,              // available for upgrades later
+      migrationsRun: false,    // we invoke runMigrations() manually below
+      synchronize: false,      // we’ll call synchronize() on demand
       logging: false,
     } as any)
 
     await ds.initialize()
 
-    const [{ current_database }] = await ds.query(
-      'SELECT current_database() AS current_database',
-    )
-    const [{ current_schema }] = await ds.query(
-      'SELECT current_schema() AS current_schema',
-    )
+    const [{ current_database }] = await ds.query('SELECT current_database() AS current_database')
+    const [{ current_schema }]  = await ds.query('SELECT current_schema() AS current_schema')
 
-    const ran = dry ? [] : await ds.runMigrations()
+    let ran: any[] = []
+    let createdVia: 'migrations' | 'synchronize' | undefined
+
+    if (!dry) {
+      try {
+        // Try migrations first (in case you’re upgrading an existing DB)
+        ran = await ds.runMigrations()
+        createdVia = 'migrations'
+      } catch (e: any) {
+        const msg = (e?.message || '').toLowerCase()
+        const looksLikeFreshDb =
+          msg.includes('premigrationkey') ||
+          msg.includes('does not exist') ||
+          msg.includes('relation') && msg.includes('not exist')
+
+        if (!looksLikeFreshDb) throw e
+
+        // Fresh DB path: create the latest schema directly from Entities
+        await ds.synchronize()
+        createdVia = 'synchronize'
+        ran = []
+      }
+    }
 
     return json(200, {
       ok: true,
       current_database,
       current_schema,
+      createdVia: dry ? 'none' : createdVia,
       ran,
       dry,
       note: isPooler
-        ? 'Warning: using Supabase pooler host for migrations. Prefer the direct host (db.<project-ref>.<region>.supabase.co).'
+        ? 'Warning: using Supabase Session Pooler for migrations (IPv4). Prefer direct host when available.'
         : undefined,
     })
   } catch (e: any) {
-    return json(500, {
-      ok: false,
-      message: e?.message || String(e),
-      stack: e?.stack,
-    })
+    return json(500, { ok: false, message: e?.message || String(e), stack: e?.stack })
   } finally {
-    try {
-      if (ds?.isInitialized) await ds.destroy()
-    } catch {
-      // ignore
-    }
+    try { if (ds?.isInitialized) await ds.destroy() } catch {}
   }
 }

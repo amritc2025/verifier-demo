@@ -54,7 +54,7 @@ const dbConnection = new DataSource({
   ssl: { rejectUnauthorized: false },
   entities: Entities,
   migrations,
-  migrationsRun: true,
+  migrationsRun: false,
   synchronize: false,
   logging: false,
 })
