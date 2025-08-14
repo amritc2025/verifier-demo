@@ -29,7 +29,7 @@ export const handler: Handler = async (event) => {
   if (!rawAuth.toLowerCase().startsWith('bearer ')) {
     return { statusCode: 401, headers: JSON_HEADERS, body: JSON.stringify({ error: 'invalid_token', error_description: 'Missing Bearer token' }) }
   }
-  const token = rawAuth.slice('bearer '.length)
+  const token = rawAuth.slice('bearer '.length).trim()
   if (token !== 'access-test-code-123') {
     return { statusCode: 403, headers: JSON_HEADERS, body: JSON.stringify({ error: 'invalid_token' }) }
   }
@@ -37,15 +37,31 @@ export const handler: Handler = async (event) => {
   try {
     // 1) load base agent (no credential-ld)
     const { getAgent } = await import('./agent')
-    const agent = await getAgent()
+    const agent: any = await getAgent()
 
-    // 2) lazily load credential-ld + contexts right before issuance
+    // 2) resolve the issuer DID by alias (seeded via /did-seed)
+    const alias = process.env.ISSUER_ALIAS || 'issuer-prod'
+    let issuerIdentifier: any
+    try {
+      issuerIdentifier = await agent.didManagerGetByAlias({ alias, provider: 'did:key' })
+    } catch {
+      return {
+        statusCode: 500,
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          error: 'server_error',
+          message: `Issuer DID with alias "${alias}" not found. Please call /.netlify/functions/did-seed once, then retry.`,
+        }),
+      }
+    }
+    const issuerDid: string = issuerIdentifier.did
+
+    // 3) lazily load credential-ld + contexts right before issuance
     const { CredentialIssuerLD, VeramoEd25519Signature2018 } = await import('@veramo/credential-ld')
     const { contexts } = await import('@digitalbazaar/credentials-context')
 
-    // 3) create a temporary agent WITH the LD plugin attached
-    //    (re-using the same base agent methods via "context" mechanism)
-    const agentWithLd = Object.assign({}, agent, {
+    // 4) create a temporary agent WITH the LD plugin attached
+    const agentWithLd: any = Object.assign({}, agent, {
       plugins: [
         ...(agent.plugins || []),
         new CredentialIssuerLD({
@@ -55,15 +71,20 @@ export const handler: Handler = async (event) => {
       ],
     })
 
-    // 4) find or create issuer DID
-    const identifiers = await agent.didManagerFind()
-    const issuerDid = identifiers.length
-      ? identifiers[0].did
-      : (await agent.didManagerCreate({ provider: 'did:key' })).did
+    // 5) body / subject handling (allow caller to override)
+    let body: any = {}
+    try { body = event.body ? JSON.parse(event.body) : {} } catch {}
+    const subjectDid = body?.credentialSubject?.id || body?.subject || issuerDid // demo default
+    const credentialSubject = body?.credentialSubject || {
+      id: subjectDid,
+      givenName: 'John',
+      familyName: 'Walt',
+      birthDate: '2000-01-01',
+      drivingClass: 'Motocycle, Private Car',
+      expiryDate: '2030-12-31',
+    }
 
-    const subjectDid = issuerDid
-
-    // 5) issue LDP VC using the LD-capable agent
+    // 6) issue LDP VC using the LD-capable agent
     const vc = await agentWithLd.createVerifiableCredential({
       credential: {
         '@context': [
@@ -80,14 +101,7 @@ export const handler: Handler = async (event) => {
         type: ['VerifiableCredential', 'MobileDrivingLicence'],
         issuer: { id: issuerDid },
         issuanceDate: new Date().toISOString(),
-        credentialSubject: {
-          id: subjectDid,
-          givenName: 'John',
-          familyName: 'Walt',
-          birthDate: '2000-01-01',
-          drivingClass: 'Motocycle, Private Car',
-          expiryDate: '2030-12-31',
-        },
+        credentialSubject,
       },
       proofFormat: 'ldp_vc',
     })
