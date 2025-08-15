@@ -13,7 +13,7 @@ export const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: METHOD_HEADERS('POST'), body: '' }
   if (event.httpMethod !== 'POST') return { statusCode: 405, headers: METHOD_HEADERS('POST'), body: JSON.stringify({ error: 'method_not_allowed' }) }
 
-  // Simple bearer check (pre-auth demo)
+  // Simple bearer check
   const rawAuth = String(event.headers['authorization'] || event.headers['Authorization'] || '')
   if (!rawAuth.toLowerCase().startsWith('bearer ')) {
     return { statusCode: 401, headers: JSON_HEADERS, body: JSON.stringify({ error: 'invalid_token', error_description: 'Missing Bearer token' }) }
@@ -22,11 +22,11 @@ export const handler: Handler = async (event) => {
   if (token !== 'access-test-code-123') return { statusCode: 403, headers: JSON_HEADERS, body: JSON.stringify({ error: 'invalid_token' }) }
 
   try {
-    // 1) base agent (no LD wired globally)
+    // 1) base agent
     const { getAgent } = await import('./agent')
     const agent: any = await getAgent()
 
-    // 2) resolve issuer DID by alias (seed once via /did-seed)
+    // 2) issuer DID by alias (seed once via /did-seed)
     const alias = process.env.ISSUER_ALIAS || 'issuer-prod'
     let issuerIdentifier: any
     try {
@@ -40,7 +40,7 @@ export const handler: Handler = async (event) => {
     }
     const issuerDid: string = issuerIdentifier.did
 
-    // 3) parse request (caller may override subject/claims)
+    // 3) request parsing
     let body: any = {}
     try { body = event.body ? JSON.parse(event.body) : {} } catch {}
     const subjectDid = body?.credentialSubject?.id || body?.subject || issuerDid // demo default
@@ -72,51 +72,30 @@ export const handler: Handler = async (event) => {
       credentialSubject,
     }
 
-    // 5) choose format: default LD (for MATTR JSON creds), optional JWT via env for debugging
-    const prefer = (process.env.VC_FORMAT || 'ldp_vc').toLowerCase()
-
-    if (prefer === 'jwt_vc_json') {
-      // JWT VC path (debug or if you intentionally want VC-JWT)
-      if (typeof (agent as any).createVerifiableCredential !== 'function') {
-        const { CredentialIssuer } = await import('@veramo/credential-w3c')
-        const agentWithJwt: any = Object.assign({}, agent, { plugins: [ ...(agent.plugins || []), new CredentialIssuer() ] })
-        const vc = await agentWithJwt.createVerifiableCredential({ credential: unsignedVc, proofFormat: 'jwt' })
-        return { statusCode: 200, headers: JSON_HEADERS, body: JSON.stringify(vc) }
-      }
-      const vc = await agent.createVerifiableCredential({ credential: unsignedVc, proofFormat: 'jwt' })
-      return { statusCode: 200, headers: JSON_HEADERS, body: JSON.stringify(vc) }
-    }
-
-    // LD (Data Integrity) path — expected by MATTR for JSON credentials
+    // 5) LD issuance using ONLY Veramo's built-in contexts
     try {
       const { CredentialIssuerLD, VeramoEd25519Signature2018, LdDefaultContexts } = await import('@veramo/credential-ld')
-      const { contexts } = await import('@digitalbazaar/credentials-context')
 
       const agentWithLd: any = Object.assign({}, agent, {
         plugins: [
           ...(agent.plugins || []),
           new CredentialIssuerLD({
             suites: [new VeramoEd25519Signature2018()],
-            // include both Veramo’s baked contexts and the W3C VC context map
-            contextMaps: [LdDefaultContexts, contexts],
+            contextMaps: [LdDefaultContexts], // <— minimal & safe
           }),
         ],
       })
 
       const vc = await agentWithLd.createVerifiableCredential({
         credential: unsignedVc,
-        // Veramo accepts 'lds' (Data Integrity). 'ldp_vc' is an alias in newer versions, but 'lds' is safest.
+        // Veramo canonical name for Data Integrity. (OID4VCI "format" is ldp_vc.)
         proofFormat: 'lds',
       })
 
       return { statusCode: 200, headers: JSON_HEADERS, body: JSON.stringify(vc) }
     } catch (ldErr: any) {
-      // Surface the LD loader/suite error clearly (avoid opaque 502s)
-      return {
-        statusCode: 500,
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ error: 'ldp_error', message: ldErr?.message || String(ldErr) }),
-      }
+      // Return a clear error instead of opaque 502
+      return { statusCode: 500, headers: JSON_HEADERS, body: JSON.stringify({ error: 'ldp_error', message: ldErr?.message || String(ldErr) }) }
     }
   } catch (e: any) {
     console.error('issuer error', e)
