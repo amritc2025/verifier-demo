@@ -1,30 +1,45 @@
 [build]
   functions = "netlify/functions"
-  publish = "."
+  publish   = "."
 
   [build.environment]
     NODE_VERSION = "18"
 
+# Global defaults for all functions
 [functions]
   node_bundler = "esbuild"
+  # Keep only small/commonly used modules global
+  external_node_modules = ["pg"]
+
+# Heavy JSON-LD deps ONLY for issuer (and optional verifier)
+[[functions]]
+  path = "credential-issuer"
   external_node_modules = [
-     "pg",
     "@veramo/credential-ld",
-    "@transmute/jsonld",
     "jsonld",
+    "@transmute/jsonld",
+    "@digitalbazaar/http-client"
+  ]
+
+# If you have a server-side verifier that uses LD, keep this.
+# Remove this block if you don't ship verify-vc.
+[[functions]]
+  path = "verify-vc"
+  external_node_modules = [
+    "@veramo/credential-ld",
+    "jsonld",
+    "@transmute/jsonld",
     "@digitalbazaar/http-client"
   ]
 
 [[redirects]]
   from = "/credential-offer"
-  to = "/.netlify/functions/credential-offer"
+  to   = "/.netlify/functions/credential-offer"
   status = 200
 
 [[redirects]]
   from = "/.well-known/openid-credential-issuer"
-  to = "/.netlify/functions/openid-credential-issuer"
+  to   = "/.netlify/functions/openid-credential-issuer"
   status = 200
-
-
 
 
